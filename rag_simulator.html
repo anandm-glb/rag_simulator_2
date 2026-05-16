@@ -136,4 +136,332 @@
       margin-bottom: 14px;
     }
 
-    .doc
+    .doc {
+      background: #1e293b;
+      padding: 12px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      border-left: 4px solid transparent;
+    }
+
+    .doc.retrieved {
+      border-left-color: #22c55e;
+      background: rgba(34,197,94,0.1);
+    }
+
+    .chunk {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+      font-size: 0.9rem;
+    }
+
+    .score {
+      color: #22c55e;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .answer {
+      background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.15));
+      border: 1px solid #3b82f6;
+      padding: 18px;
+      border-radius: 14px;
+      line-height: 1.7;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #1d4ed8;
+      font-size: 0.8rem;
+      margin-bottom: 10px;
+    }
+
+    .log {
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: #cbd5e1;
+    }
+
+    .highlight {
+      color: #60a5fa;
+      font-weight: bold;
+    }
+
+    @media(max-width: 1100px) {
+      .layout,
+      .content-grid,
+      .workflow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>RAG (Retrieval-Augmented Generation) Simulator</h1>
+  <p class="subtitle">
+    Learn how RAG works step-by-step: Document Loading → Chunking → Embeddings → Retrieval → LLM Response
+  </p>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Simulator Controls</h2>
+
+      <textarea id="documents" rows="12">
+Artificial Intelligence is transforming healthcare through predictive diagnostics and personalized medicine.
+
+RAG stands for Retrieval-Augmented Generation. It combines information retrieval with large language models.
+
+Vector databases store embeddings that help retrieve semantically similar information.
+
+Embeddings convert text into numerical vectors representing semantic meaning.
+
+Chunking breaks large documents into smaller pieces before embedding and indexing.
+      </textarea>
+
+      <input id="query" value="How does RAG use embeddings and retrieval?" />
+
+      <button onclick="runRAG()">Run RAG Pipeline</button>
+      <button onclick="resetSimulator()">Reset</button>
+
+      <div class="card" style="margin-top: 16px;">
+        <h3>What You Will Learn</h3>
+        <div class="log">
+          • How documents are split into chunks<br><br>
+          • How embeddings represent meaning<br><br>
+          • How similarity search retrieves context<br><br>
+          • How the LLM uses retrieved knowledge
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="workflow">
+        <div class="step" id="step1">
+          <div class="step-number">1</div>
+          <h3>Load Docs</h3>
+          <p>Documents are ingested into the RAG system.</p>
+        </div>
+
+        <div class="step" id="step2">
+          <div class="step-number">2</div>
+          <h3>Chunking</h3>
+          <p>Documents are split into smaller chunks.</p>
+        </div>
+
+        <div class="step" id="step3">
+          <div class="step-number">3</div>
+          <h3>Embeddings</h3>
+          <p>Chunks are converted into semantic vectors.</p>
+        </div>
+
+        <div class="step" id="step4">
+          <div class="step-number">4</div>
+          <h3>Retrieval</h3>
+          <p>Most relevant chunks are retrieved using similarity search.</p>
+        </div>
+
+        <div class="step" id="step5">
+          <div class="step-number">5</div>
+          <h3>Generation</h3>
+          <p>The LLM generates a grounded response using retrieved context.</p>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <div class="card">
+          <h3>Document Processing</h3>
+          <div id="processingOutput"></div>
+        </div>
+
+        <div class="card">
+          <h3>Retrieval + Generation</h3>
+          <div id="retrievalOutput"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function activateStep(stepNumber) {
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById(`step${i}`).classList.remove('active');
+      }
+      document.getElementById(`step${stepNumber}`).classList.add('active');
+    }
+
+    function fakeEmbedding(text) {
+      return {
+        length: text.length,
+        words: text.split(' ').length,
+        score: Math.random().toFixed(3)
+      };
+    }
+
+    function similarity(query, chunk) {
+      const queryWords = query.toLowerCase().split(/\W+/);
+      const chunkWords = chunk.toLowerCase().split(/\W+/);
+
+      let matches = 0;
+      queryWords.forEach(word => {
+        if (chunkWords.includes(word)) matches++;
+      });
+
+      return matches / queryWords.length;
+    }
+
+    async function runRAG() {
+      const docs = document.getElementById('documents').value
+        .split('\n\n')
+        .filter(d => d.trim());
+
+      const query = document.getElementById('query').value;
+
+      const processingOutput = document.getElementById('processingOutput');
+      const retrievalOutput = document.getElementById('retrievalOutput');
+
+      processingOutput.innerHTML = '';
+      retrievalOutput.innerHTML = '';
+
+      // STEP 1
+      activateStep(1);
+      await wait(700);
+
+      processingOutput.innerHTML += `
+        <div class="tag">STEP 1: DOCUMENT INGESTION</div>
+        <div class="log">
+          Loaded <span class="highlight">${docs.length}</span> documents into the knowledge base.
+        </div>
+      `;
+
+      // STEP 2
+      activateStep(2);
+      await wait(900);
+
+      let chunks = [];
+
+      docs.forEach((doc, index) => {
+        const sentences = doc.split('.').filter(s => s.trim());
+
+        sentences.forEach((sentence, chunkIndex) => {
+          chunks.push({
+            id: `${index + 1}.${chunkIndex + 1}`,
+            text: sentence.trim()
+          });
+        });
+      });
+
+      processingOutput.innerHTML += `
+        <div class="tag">STEP 2: CHUNKING</div>
+        <div class="log">
+          Split documents into <span class="highlight">${chunks.length}</span> chunks.
+        </div>
+      `;
+
+      chunks.forEach(chunk => {
+        processingOutput.innerHTML += `
+          <div class="chunk">
+            <strong>Chunk ${chunk.id}</strong><br>
+            ${chunk.text}
+          </div>
+        `;
+      });
+
+      // STEP 3
+      activateStep(3);
+      await wait(1000);
+
+      chunks = chunks.map(chunk => ({
+        ...chunk,
+        embedding: fakeEmbedding(chunk.text)
+      }));
+
+      processingOutput.innerHTML += `
+        <div class="tag" style="margin-top:16px;">STEP 3: EMBEDDINGS</div>
+        <div class="log">
+          Each chunk is transformed into a numerical vector representation.
+        </div>
+      `;
+
+      chunks.forEach(chunk => {
+        processingOutput.innerHTML += `
+          <div class="chunk">
+            <strong>Chunk ${chunk.id} Vector</strong><br>
+            Dimensions: ${chunk.embedding.words} | Semantic Score: ${chunk.embedding.score}
+          </div>
+        `;
+      });
+
+      // STEP 4
+      activateStep(4);
+      await wait(1000);
+
+      const ranked = chunks
+        .map(chunk => ({
+          ...chunk,
+          similarity: similarity(query, chunk.text)
+        }))
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 3);
+
+      retrievalOutput.innerHTML += `
+        <div class="tag">STEP 4: RETRIEVAL</div>
+        <div class="log">
+          User Query:<br><br>
+          <span class="highlight">${query}</span>
+        </div>
+      `;
+
+      ranked.forEach(chunk => {
+        retrievalOutput.innerHTML += `
+          <div class="doc retrieved">
+            <strong>Retrieved Chunk ${chunk.id}</strong>
+            <div class="chunk">${chunk.text}</div>
+            <div class="score">Similarity Score: ${chunk.similarity.toFixed(2)}</div>
+          </div>
+        `;
+      });
+
+      // STEP 5
+      activateStep(5);
+      await wait(1200);
+
+      const combinedContext = ranked.map(r => r.text).join('. ');
+
+      const generatedAnswer = `
+        RAG works by retrieving relevant information before generating a response. 
+        In this example, the system converted chunks into embeddings, searched the vector database, 
+        and retrieved the most relevant chunks related to the query.
+        
+        Retrieved Context: ${combinedContext}.
+        
+        The LLM then used this retrieved knowledge to generate a grounded and context-aware response instead of relying only on pretrained memory.
+      `;
+
+      retrievalOutput.innerHTML += `
+        <div class="tag" style="margin-top:16px;">STEP 5: GENERATION</div>
+        <div class="answer">
+          ${generatedAnswer}
+        </div>
+      `;
+    }
+
+    function resetSimulator() {
+      document.getElementById('processingOutput').innerHTML = '';
+      document.getElementById('retrievalOutput').innerHTML = '';
+
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById(`step${i}`).classList.remove('active');
+      }
+    }
+
+    function wait(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+  </script>
+</body>
+</html>
